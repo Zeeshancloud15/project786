@@ -1,3 +1,1 @@
-
 file add from feature1
-file add from feature2
