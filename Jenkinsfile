@@ -2,51 +2,68 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('creds')
-        IMAGE_NAME = 'zeeshancloud15/pythonapp'
+        IMAGE_NAME = "zeeshancloud15/pythonapp"
+        IMAGE_TAG  = "${BUILD_NUMBER}"
     }
 
     stages {
-        stage('Checkout Code') {
+
+        stage('Checkout') {
             steps {
-                git branch: 'main',
-                    url: 'https://github.com/Zeeshancloud15/project786.git'
+                checkout scm
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t $IMAGE_NAME:$BUILD_NUMBER .'
+                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
             }
         }
 
-        stage('Login to Docker Hub') {
+        stage('Docker Login') {
             steps {
-                sh '''
-                    echo "$DOCKERHUB_CREDENTIALS_PSW" |
-                    docker login -u "$DOCKERHUB_CREDENTIALS_USR" --password-stdin
-                '''
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'creds',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )
+                ]) {
+                    sh '''
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    '''
+                }
             }
         }
 
-        stage('Push Image') {
+        stage('Push Docker Image') {
             steps {
-                sh 'docker push $IMAGE_NAME:$BUILD_NUMBER'
+                sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
             }
         }
     }
 
     post {
-        always {
-            sh 'docker logout || true'
-        }
-
         success {
-            slackSend message: "Build successful - ${env.JOB_NAME} ${env.BUILD_NUMBER} (${env.BUILD_URL})"
+            slackSend(
+                tokenCredentialId: 'slack-token',
+                channel: '#jenkins',
+                color: 'good',
+                message: "✅ SUCCESS: ${JOB_NAME} #${BUILD_NUMBER}"
+            )
         }
 
         failure {
-            slackSend message: "Build failed - ${env.JOB_NAME} ${env.BUILD_NUMBER} (${env.BUILD_URL})"
+            slackSend(
+                tokenCredentialId: 'slack-token',
+                channel: '#jenkins',
+                color: 'danger',
+                message: "❌ FAILED: ${JOB_NAME} #${BUILD_NUMBER}"
+            )
+        }
+
+        always {
+            sh 'docker logout || true'
         }
     }
 }
